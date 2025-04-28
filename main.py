@@ -13,7 +13,7 @@ load_dotenv()
 stream_url = os.getenv("RADIO_URL")
 key_phrases = json.loads(os.getenv("TARGET_PHRASES"))
 
-model = whisper.load_model("medium")
+model = whisper.load_model("base")
 
 def on_phrase_detected(phrase, full_text):
     send_message(f"🔥 DETECTED: '{phrase}' inside: {full_text}")
@@ -59,6 +59,7 @@ def transcribe_radio_stream(url):
     try:
         while True:
             # Read audio chunk
+            print("⏳ Reading audio chunk...")
             audio_chunk = process.stdout.read(sample_rate * 2 * seconds_per_chunk)
 
             if not audio_chunk or len(audio_chunk) < sample_rate * 2 * seconds_per_chunk:
@@ -73,6 +74,8 @@ def transcribe_radio_stream(url):
             # Concatenate previous overlap with current audio
             combined_audio = torch.cat((previous_audio, current_audio), dim=0)
 
+            print("🔊 Processing audio chunk...")
+
             result = safe_transcribe(model, combined_audio)
 
             if result is None:
@@ -83,6 +86,7 @@ def transcribe_radio_stream(url):
 
             print("📝", text)
 
+            print("🔍 Searching for key phrases...")
             # Detect key phrases
             for phrase in key_phrases:
                 if phrase.lower() in text:
