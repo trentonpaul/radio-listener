@@ -1,67 +1,87 @@
-# import subprocess
-# import speech_recognition as sr
-# from pydub import AudioSegment
-# from io import BytesIO
+import whisper
+import ffmpeg
+import numpy as np
+import torch
+import time
+from telegram_bot import send_message
 
 STREAM_URL = "https://25053.live.streamtheworld.com/WTMXFM.mp3?dist=hubbard&source=hubbard-web&ttag=web&gdpr=0"
 
-import whisper
-import subprocess
-import time
-import numpy as np
-import torch
-from io import BytesIO
+model = whisper.load_model("medium")
 
-# Load the Whisper model (can try 'base', 'small', 'medium', or 'large')
-model = whisper.load_model("tiny")
+KEY_PHRASES = [
+    "101.9",
+]
 
-# Function to pull the radio stream via ffmpeg
+def on_phrase_detected(phrase, full_text):
+    send_message(f"🔥 DETECTED: '{phrase}' inside: {full_text}")
+    print(f"🔥 DETECTED: '{phrase}' inside: {full_text}")
+
 def get_radio_stream(url):
-    # Use ffmpeg to get audio as raw PCM (16-bit WAV)
-    process = subprocess.Popen([
-        "ffmpeg",
-        "-i", url,
-        "-f", "wav",            # Output format (WAV)
-        "-ar", "16000",         # Sample rate (16 kHz)
-        "-ac", "1",             # Mono channel
-        "-loglevel", "quiet",   # Quiet output (no logs)
-        "pipe:1"                # Send the audio to stdout
-    ], stdout=subprocess.PIPE)
+    process = (
+        ffmpeg
+        .input(url)
+        .output('pipe:', format='wav', acodec='pcm_s16le', ac=1, ar='16000')
+        .run_async(pipe_stdout=True, pipe_stderr=True)
+    )
     return process
 
-# Function to convert raw audio bytes to numpy array and normalize
 def convert_audio_to_numpy(audio_bytes):
-    # Convert raw audio bytes to numpy array (int16 PCM)
     audio = np.frombuffer(audio_bytes, dtype=np.int16)
-
-    # Normalize to [-1, 1] (Whisper expects floating point values)
     audio = audio.astype(np.float32) / 32768.0
-    
-    # Convert to torch tensor (required by Whisper)
-    audio_tensor = torch.from_numpy(audio)
-    
-    return audio_tensor
+    return torch.from_numpy(audio)
 
-# Function to transcribe the radio stream in real-time
 def transcribe_radio_stream(url):
+    seconds_per_chunk = 10
+    overlap_seconds = 2
+
+    sample_rate = 16000
+    samples_per_chunk = sample_rate * seconds_per_chunk
+    samples_overlap = sample_rate * overlap_seconds
+
+    previous_audio = torch.tensor([])
+
     process = get_radio_stream(url)
-    
-    while True:
-        # Read 5 seconds of audio (16000 samples/second * 2 bytes per sample * 5 seconds)
-        audio_chunk = process.stdout.read(16000 * 2 * 5)  # 5 seconds of audio
-        if not audio_chunk:
-            break
 
-        # Convert audio chunk (bytes) to numpy array
-        audio_data = convert_audio_to_numpy(audio_chunk)
+    try:
+        while True:
+            # Read audio chunk
+            audio_chunk = process.stdout.read(sample_rate * 2 * seconds_per_chunk)
 
-        # Feed the audio data to Whisper for transcription
-        result = model.transcribe(audio_data)
-        
-        # Print the transcription
-        print("TEXT:", result['text'])
-        
-        # Sleep to simulate real-time processing (optional)
-        time.sleep(1)
+            if not audio_chunk or len(audio_chunk) < sample_rate * 2 * seconds_per_chunk:
+                print("⚠️ Stream hiccup detected. Restarting ffmpeg...")
+                process.kill()
+                time.sleep(1)
+                process = get_radio_stream(url)
+                continue
+
+            current_audio = convert_audio_to_numpy(audio_chunk)
+
+            # Concatenate previous overlap with current audio
+            combined_audio = torch.cat((previous_audio, current_audio), dim=0)
+
+            # Transcribe
+            result = model.transcribe(combined_audio)
+            text = result['text'].lower()
+
+            print("📝:", text)
+
+            # Detect key phrases
+            for phrase in KEY_PHRASES:
+                if phrase.lower() in text:
+                    on_phrase_detected(phrase, text)
+
+            # Save last N seconds for next overlap
+            if len(current_audio) >= samples_overlap:
+                previous_audio = current_audio[-samples_overlap:]
+            else:
+                previous_audio = current_audio
+
+            time.sleep(0.2)  # Shorter sleep now, less lag buildup
+
+    except KeyboardInterrupt:
+        print("Stopping...")
+    finally:
+        process.kill()
 
 transcribe_radio_stream(STREAM_URL)
