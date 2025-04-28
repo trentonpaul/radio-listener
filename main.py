@@ -77,7 +77,7 @@ def transcribe_radio_stream(url):
             else:
                 previous_audio = current_audio
 
-            time.sleep(0.2)  # Shorter sleep now, less lag buildup
+            time.sleep(0.2)
 
     except KeyboardInterrupt:
         print("Stopping...")
