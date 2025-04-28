@@ -1,0 +1,8 @@
+# requirements.txt
+
+openai-whisper
+ffmpeg-python
+numpy
+torch
+python-dotenv
+python-telegram-bot
