@@ -1,7 +1,7 @@
 from telegram import Bot
+import asyncio
 from dotenv import load_dotenv
 import os
-import asyncio
 
 load_dotenv()
 bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -12,4 +12,4 @@ def send_message(message):
 
 async def send_notification(message):
     bot = Bot(token=bot_token)
-    await bot.send_message(chat_id=chat_id, text=f'101.9 THE MIX ALERT: {message}')
+    await bot.send_message(chat_id=chat_id, text=message)

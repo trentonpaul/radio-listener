@@ -5,15 +5,15 @@ import torch
 import time
 import concurrent.futures
 from telegram_bot import send_message
+from dotenv import load_dotenv
+import os
+import json
 
-STREAM_URL = "https://25053.live.streamtheworld.com/WTMXFM.mp3?dist=hubbard&source=hubbard-web&ttag=web&gdpr=0"
+load_dotenv()
+stream_url = os.getenv("RADIO_URL")
+key_phrases = json.loads(os.getenv("TARGET_PHRASES"))
 
 model = whisper.load_model("medium")
-
-KEY_PHRASES = [
-    "jeff paul",
-    "trenton paul",
-]
 
 def on_phrase_detected(phrase, full_text):
     send_message(f"🔥 DETECTED: '{phrase}' inside: {full_text}")
@@ -81,10 +81,10 @@ def transcribe_radio_stream(url):
 
             text = result['text'].lower()
 
-            print("📝:", text)
+            print("📝", text)
 
             # Detect key phrases
-            for phrase in KEY_PHRASES:
+            for phrase in key_phrases:
                 if phrase.lower() in text:
                     on_phrase_detected(phrase, text)
 
@@ -101,4 +101,4 @@ def transcribe_radio_stream(url):
     finally:
         process.kill()
 
-transcribe_radio_stream(STREAM_URL)
+transcribe_radio_stream(stream_url)
