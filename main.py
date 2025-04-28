@@ -3,6 +3,7 @@ import ffmpeg
 import numpy as np
 import torch
 import time
+import concurrent.futures
 from telegram_bot import send_message
 
 STREAM_URL = "https://25053.live.streamtheworld.com/WTMXFM.mp3?dist=hubbard&source=hubbard-web&ttag=web&gdpr=0"
@@ -10,7 +11,8 @@ STREAM_URL = "https://25053.live.streamtheworld.com/WTMXFM.mp3?dist=hubbard&sour
 model = whisper.load_model("medium")
 
 KEY_PHRASES = [
-    "101.9",
+    "jeff paul",
+    "trenton paul",
 ]
 
 def on_phrase_detected(phrase, full_text):
@@ -30,6 +32,17 @@ def convert_audio_to_numpy(audio_bytes):
     audio = np.frombuffer(audio_bytes, dtype=np.int16)
     audio = audio.astype(np.float32) / 32768.0
     return torch.from_numpy(audio)
+
+def safe_transcribe(model, audio_tensor, timeout=20):
+    # Safely transcribe audio with a timeout to prevent getting stuck.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(model.transcribe, audio_tensor)
+        try:
+            result = future.result(timeout=timeout)
+            return result
+        except concurrent.futures.TimeoutError:
+            print("⚠️ Transcription timeout. Skipping this chunk...")
+            return None
 
 def transcribe_radio_stream(url):
     seconds_per_chunk = 10
@@ -60,8 +73,12 @@ def transcribe_radio_stream(url):
             # Concatenate previous overlap with current audio
             combined_audio = torch.cat((previous_audio, current_audio), dim=0)
 
-            # Transcribe
-            result = model.transcribe(combined_audio)
+            result = safe_transcribe(model, combined_audio)
+
+            if result is None:
+                # Skip this chunk if transcription failed
+                continue
+
             text = result['text'].lower()
 
             print("📝:", text)
