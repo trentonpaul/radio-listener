@@ -92,6 +92,8 @@ When a target phrase is detected, you will see output similar to:
 🔥 DETECTED: 'PHRASE_ONE' inside: new music playing now on your favorite station!
 ```
 
+Simultaneously, this message gets transmitted to your Telegram bot.
+
 ---
 
 ## License
