@@ -4,6 +4,8 @@ Welcome to **RadioScout**, a simple tool that listens to an online audio stream 
 
 RadioScout continuously monitors the transcription for specific target phrases and sends instant Telegram alerts when they are detected.
 
+Note: This project is designed to be modular and easily-modifiable to integrate with your own streams, APIs, and preferences.
+
 ---
 
 ## Requirements
